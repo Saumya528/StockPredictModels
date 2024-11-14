@@ -1,0 +1,17 @@
+from flask import Flask, jsonify, request
+
+app = Flask(__name__)
+
+@app.route('/fetch-indicators', methods=['POST'])
+def fetch_indicators():
+    try:
+        payload = request.get_json()
+        return jsonify({
+            "message": "POST method works!",
+            "received_payload": payload
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True)

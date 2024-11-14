@@ -1,0 +1,5 @@
+Flask
+Werkzeug
+nsepython==2.94
+plotly==5.0.0
+pandas

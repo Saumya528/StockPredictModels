@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock API Client</title>
+  <script></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f9;
+    }
+    .container {
+      width: 80%;
+      margin: auto;
+      background: #fff; 
+      margin-top: auto;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 10px;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      background: #007BFF;
+      color: #fff;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background: #e9ecef;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Stock API Client</h1>
+
+    <!-- Get Stock Price -->
+    <h2>Get Stock Price</h2>
+    <label for="stockSymbol">Stock Symbol:</label>
+    <input type="text" id="stockSymbol" placeholder="Enter stock symbol (e.g., RELIANCE)" />
+    <button onclick="getStockPrice()">Get Price</button>
+    <div id="stockPriceResult" class="result"></div>
+
+    <h2>Stock Chart Viewer</h1>
+
+    <form id="stock-form">
+        <label for="symbol">Enter Stock Symbol:</label>
+        <input type="text" id="symbol" name="symbol" placeholder="e.g., AAPL"><br><br>
+        <button type="button" onclick="fetchStockChart()">Generate Chart</button>
+    </form>
+
+    <h2>Generated Stock Chart:</h2>
+    <div id="chart" style="width: 100%; height: 500px;"></div>
+    
+    <!-- Fetch Indicators -->
+    <h1>Stock Indicator Chart</h1>
+    <form id="stockForm">
+        <input type="text" id="symbol" placeholder="Stock Symbol (e.g., RELIANCE)" required>
+        <input type="text" id="start_date" placeholder="Start Date (DD-MM-YYYY)" required>
+        <input type="text" id="end_date" placeholder="End Date (DD-MM-YYYY)" required>
+        <button type="submit">Get Chart</button>
+    </form>
+    <div id="chart2"></div>
+</div>
+
+  <script>
+    const baseUrl = 'http://127.0.0.1:5000';  // Adjust base URL for your Flask app
+
+    // Fetch Stock Price
+    async function getStockPrice() {
+      const symbol = document.getElementById('stockSymbol').value;
+      try {
+        const response = await fetch(`${baseUrl}/stock-price?symbol=${symbol}`);
+        const data = await response.json();
+        if (response.ok) {
+          document.getElementById('stockPriceResult').innerHTML = `
+            <strong>Symbol:</strong> ${data.symbol} <br>
+            <strong>Price:</strong> ${data.price}
+          `;
+        } else {
+          document.getElementById('stockPriceResult').innerHTML = `<span class="error">${data.error}</span>`;
+        }
+      } catch (error) {
+        document.getElementById('stockPriceResult').innerHTML = `<span class="error">${error.message}</span>`;
+      }
+    }
+
+    // Fetch Stock Chart
+    async function fetchStockChart() {
+            const symbol = document.getElementById('symbol').value;
+
+            if (!symbol) {
+                alert('Please enter a stock symbol.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseUrl}/stock-chart?symbol=${symbol}`);
+
+                if (response.ok) {
+                    const chartData = await response.json();
+
+                     // Render the chart using Plotly
+                     const combinedLayout = {
+                        title: chartData.layout.title,
+                        xaxis: chartData.layout.xaxis,
+                        yaxis: chartData.layout.yaxis,
+                        yaxis2: chartData.layout.yaxis2,
+                        grid: { rows: 2, columns: 1, subplots: [["xy"], ["xy2"]], roworder: 'top to bottom' },
+                        showlegend: true
+                    };
+
+                    // Combine price and volume as subplots
+                    const combinedData = chartData.data.map((trace, index) => {
+                        if (index === 1) { // Assuming second data is Volume
+                            trace.yaxis = 'y2'; // Assign to second y-axis
+                        }
+                        return trace;
+                    });
+
+                    Plotly.react('chart', combinedData, combinedLayout);
+                } else {
+                    const errorData = await response.json();
+                    alert(`Error: ${errorData.error}`);
+                }
+            } catch (error) {
+                alert(`An error occurred: ${error.message}`);
+            }
+        }
+
+    // Fetch Indicators
+    document.getElementById('stockForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const symbol = document.getElementById('symbol').value;
+            const start_date = document.getElementById('start_date').value;
+            const end_date = document.getElementById('end_date').value;
+
+            if (!symbol || !start_date || !end_date) {
+                alert("Please fill out all fields.");
+                return;
+            }
+
+            try {
+                const response = await axios.post('/stock-indicator-chart', {
+                    symbol,
+                    start_date,
+                    end_date
+                });
+
+                const chartData = response.data;
+
+                if (chartData.error) {
+                    alert(chartData.error);
+                    return;
+                }
+                if (response.ok)
+                 {
+                    const chartData = await response.json();
+
+                     // Render the chart using Plotly
+                     const combinedLayout = {
+                        title: chartData.layout.title,
+                        xaxis: chartData.layout.xaxis,
+                        yaxis: chartData.layout.yaxis,
+                        yaxis2: chartData.layout.yaxis2,
+                        grid: { rows: 2, columns: 1, subplots: [["xy"], ["xy2"]], roworder: 'top to bottom' },
+                        showlegend: true
+                    };
+
+                    // Combine price and volume as subplots
+                    const combinedData = chartData.data.map((trace, index) => {
+                        if (index === 1) { // Assuming second data is Volume
+                            trace.yaxis = 'y2'; // Assign to second y-axis
+                        }
+                        return trace;
+                    });
+                  }
+
+                // Render the chart using Plotly
+                Plotly.newPlot('chart2', chartData.data);
+            } catch (error) {
+                console.error(error);
+                alert("An error occurred while fetching the data. Please check your inputs or try again later.");
+            }
+        });
+  </script>
+</body>
+</html>
