@@ -1,5 +1,7 @@
 Install NSE tools
+NSEPython Documentation:
 
+https://pypi.org/project/nsepython/
 
 *python -m pip install --upgrade pip==21.0.1
 
@@ -61,5 +63,3 @@ docker rm flask-container
 docker run -d -p 5000:5000 --name flask-container flask-app
 
 pip install flask-cors
-
-Git Repo: https://github.com/Saumya528/StockPredictModels.git
