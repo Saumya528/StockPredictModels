@@ -7,7 +7,7 @@ import datetime
 end_date = datetime.datetime.now().strftime("%d-%m-%Y")
 start_date = (datetime.datetime.now() - datetime.timedelta(days=365)).strftime("%d-%m-%Y")
 
-symbol = "SBIN"  # Replace with your desired symbol
+symbol = input("Enter your stock (eg: RELIANCE) ")   # Replace with your desired symbol
 series = "EQ"
 
 df = equity_history(symbol, series, start_date, end_date)
@@ -26,8 +26,12 @@ df['low'] = df['CH_TRADE_LOW_PRICE']
 df['volume'] = df['CH_TOT_TRADED_QTY']
 
 # Calculate SMA (Simple Moving Average)
-df['SMA_20'] = df['close'].rolling(window=20).mean()
-df['SMA_50'] = df['close'].rolling(window=50).mean()
+df['SMA_15'] = df['close'].rolling(window=15).mean()
+df['SMA_200'] = df['close'].rolling(window=200).mean()
+
+# Calculate EMA (Exponential Moving Average)
+df['EMA_21'] = df['close'].ewm(span=21, adjust=False).mean()
+df['EMA_50'] = df['close'].ewm(span=50, adjust=False).mean()
 
 # Calculate RSI (Relative Strength Index)
 delta = df['close'].diff(1)
@@ -38,11 +42,8 @@ avg_loss = loss.rolling(window=14).mean()
 rs = avg_gain / avg_loss
 df['RSI'] = 100 - (100 / (1 + rs))
 
-
 # Calculate OBV (On-Balance Volume)
-df['OBV'] = 0
 df['OBV'] = (df['volume'] * ((df['close'] > df['close'].shift(1)).astype(int) - (df['close'] < df['close'].shift(1)).astype(int))).cumsum()
-
 
 # Create candlestick and volume bar chart
 fig = go.Figure(data=[
@@ -67,18 +68,35 @@ fig = go.Figure(data=[
 # Add SMA
 fig.add_trace(go.Scatter(
     x=df['date'],
-    y=df['SMA_20'],
+    y=df['SMA_15'],
     mode='lines',
-    name='SMA 20',
+    name='SMA 15',
     line=dict(color='orange')
 ))
 
 fig.add_trace(go.Scatter(
     x=df['date'],
-    y=df['SMA_50'],
+    y=df['SMA_200'],
     mode='lines',
-    name='SMA 50',
+    name='SMA 200',
     line=dict(color='green')
+))
+
+# Add EMA
+fig.add_trace(go.Scatter(
+    x=df['date'],
+    y=df['EMA_50'],
+    mode='lines',
+    name='EMA 50',
+    line=dict(color='blue', dash='dot')
+))
+
+fig.add_trace(go.Scatter(
+    x=df['date'],
+    y=df['EMA_21'],
+    mode='lines',
+    name='EMA 21',
+    line=dict(color='purple', dash='dot')
 ))
 
 # Add RSI
