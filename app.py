@@ -38,8 +38,6 @@ def get_stock_price():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Flask code: Ensure correct JSON response structure
-
 @app.route('/stock-chart', methods=['GET'])
 def get_stock_chart():
     """Endpoint to get the candlestick chart and volume of a stock."""
@@ -104,12 +102,12 @@ def stock_chart():
         request_data = request.json
         stock_symbol = request_data.get('symbol')
         strdt=datetime.strptime(request_data.get('start_date'),"%d-%m-%Y")
-        endt=datetime.strfpime(request_data.get('end_date',"%d-%m-%Y"))
+        endt=datetime.strptime(request_data.get('end_date'),"%d-%m-%Y")
         #start_date = datetime.strptime(strdt,"%d-%m-%Y")
         #end_date = datetime.strfpime(endt,"%d-%m-%Y")
 
-        start_date=datetime.strftime("'%Y-%m-%d'")
-        end_date=datetime.strftime("'%Y-%m-%d'")
+        start_date=strdt.strftime("'%Y-%m-%d'")
+        end_date=endt.strftime("'%Y-%m-%d'")
         
 
         if not stock_symbol or not start_date or not end_date:

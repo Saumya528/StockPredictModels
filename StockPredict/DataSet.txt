@@ -1,0 +1,12 @@
+Collect Values for
+obv vALUE:
+MA value:
+
+CAlculate weights.
+
+Calculate 365 historical data.
+
+Build a classifier
+
+
+Build 2nd dataset for Practising fdta

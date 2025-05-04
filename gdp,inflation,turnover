@@ -1,0 +1,80 @@
+import requests
+import yfinance as yf
+import pandas as pd
+import wbdata
+from datetime import datetime
+
+# 1. Fetch GDP Growth Data from the World Bank API
+def get_gdp_growth(country_code='USA'):
+    url = f'http://api.worldbank.org/v2/country/{country_code}/indicator/NY.GDP.MKTP.KD.ZG?format=json'
+    response = requests.get(url)
+    data = response.json()
+
+    # Extract GDP growth data (filtering by year and country)
+    gdp_growth_data = data[1]
+    gdp_growth_df = pd.DataFrame(gdp_growth_data)
+    gdp_growth_df = gdp_growth_df[['date', 'value']]  # Keep only date and GDP growth value columns
+    gdp_growth_df.rename(columns={'date': 'Year', 'value': 'GDP_Growth'}, inplace=True)
+    
+    # Convert year to datetime and filter the last 3 years
+    gdp_growth_df['Year'] = pd.to_datetime(gdp_growth_df['Year'], format='%Y')
+    gdp_growth_df = gdp_growth_df[gdp_growth_df['Year'] >= pd.to_datetime('2020-01-01')]  # Last 3 years
+    
+    return gdp_growth_df
+
+# 2. Fetch Inflation Rate from Trading Economics API (Placeholder, use real data)
+def get_inflation_rate(country='USA'):
+    # Placeholder data, replace this with actual API request or data scraping
+    inflation_data = {
+        'Date': ['2020-01-01', '2021-01-01', '2022-01-01', '2023-01-01'],
+        'Inflation_Rate': [1.5, 2.3, 3.2, 6.1]  # Example inflation data (CPI)
+    }
+    inflation_df = pd.DataFrame(inflation_data)
+    inflation_df['Date'] = pd.to_datetime(inflation_df['Date'])
+    return inflation_df
+
+# 3. Fetch Company Revenue (Turnover) from Yahoo Finance
+def get_company_revenue(stock_symbol='AAPL'):
+    stock = yf.Ticker(stock_symbol)
+    
+    # Get financials (Annual data)
+    financials = stock.financials.T  # Transpose to have years as columns
+    revenue = financials['Total Revenue']  # Assuming 'Total Revenue' is available
+    
+    # Prepare revenue data for the past 3 years
+    revenue_df = pd.DataFrame(revenue)
+    revenue_df['Year'] = revenue_df.index
+    revenue_df.rename(columns={'Total Revenue': 'Company_Revenue'}, inplace=True)
+    revenue_df = revenue_df[['Year', 'Company_Revenue']]
+    
+    # Filter for the last 3 years
+    revenue_df['Year'] = pd.to_datetime(revenue_df['Year'], format='%Y')
+    revenue_df = revenue_df[revenue_df['Year'] >= pd.to_datetime('2020-01-01')]
+    
+    return revenue_df
+
+# 4. Combine all the data into one DataFrame
+def combine_data(stock_symbol='AAPL'):
+    # Get GDP growth data for the past 3 years
+    gdp_growth = get_gdp_growth(country_code='USA')
+
+    # Get Inflation rate data for the past 3 years
+    inflation_rate = get_inflation_rate(country='USA')
+
+    # Get Company revenue (turnover) data for the past 3 years
+    company_revenue = get_company_revenue(stock_symbol)
+
+    # Merge all datasets on 'Year'
+    combined_data = pd.merge(gdp_growth, inflation_rate, how='left', left_on='Year', right_on='Date')
+    combined_data = pd.merge(combined_data, company_revenue, how='left', on='Year')
+
+    # Drop extra Date column from inflation data after merging
+    combined_data = combined_data.drop(columns=['Date'])
+
+    return combined_data
+
+# Example: Combine data for 'AAPL' stock
+combined_data = combine_data(stock_symbol='MSFT')
+
+# Display the first few rows
+print(combined_data.head())

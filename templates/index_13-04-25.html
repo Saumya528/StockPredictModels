@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock API Client</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f9;
+    }
+    .container {
+      width: 80%;
+      margin: auto;
+      background: #fff; 
+      padding: 20px;
+      margin-top: 20px;
+    }
+    h1, h2 {
+      text-align: center;
+      color: #333;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 10px;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      background: #007BFF;
+      color: #fff;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background: #e9ecef;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Stock API Client</h1>
+
+    <!-- Get Stock Price -->
+    <h2>Get Stock Price</h2>
+    <label for="stockSymbol">Stock Symbol:</label>
+    <input type="text" id="stockSymbol" placeholder="Enter stock symbol (e.g., RELIANCE)" />
+    <button onclick="getStockPrice()">Get Price</button>
+    <div id="stockPriceResult" class="result"></div>
+
+    <!-- Stock Chart Viewer -->
+    <h2>Stock Chart Viewer</h2>
+    <form id="stock-form">
+        <label for="symbol">Enter Stock Symbol:</label>
+        <input type="text" id="symbol" name="symbol" placeholder="e.g., AAPL">
+        <button type="button" onclick="fetchStockChart()">Generate Chart</button>
+    </form>
+    <div id="chart" style="width: 100%; height: 500px;"></div>
+    
+    <!-- Fetch Indicators -->
+    <h2>Stock Indicator Chart</h2>
+    <form id="stockForm">
+        <input type="text" id="indicatorSymbol" placeholder="Stock Symbol (e.g., RELIANCE)" required>
+        <input type="text" id="start_date" placeholder="Start Date (DD-MM-YYYY)" required>
+        <input type="text" id="end_date" placeholder="End Date (DD-MM-YYYY)" required>
+        <button type="submit">Get Chart</button>
+    </form>
+    <div id="chart2"></div>
+    
+    <!-- Get Latest SMA Values -->
+    <h2>Get Latest SMA Values</h2>
+    <form id="smaForm">
+        <input type="text" id="smaSymbol" placeholder="Stock Symbol (e.g., RELIANCE)" required>
+        <button type="submit">Get Latest SMA</button>
+    </form>
+    <div id="smaResult" class="result"></div>
+
+
+    <!-- Train Model -->
+    <h2>Train Prediction Model</h2>
+    <form id="trainForm">
+        <input type="text" id="trainSymbol" placeholder="Stock Symbol (e.g., RELIANCE)" required>
+        <input type="text" id="trainStartDate" placeholder="Start Date (DD-MM-YYYY)" required>
+        <input type="text" id="trainEndDate" placeholder="End Date (DD-MM-YYYY)" required>
+        <button type="submit">Train Model</button>
+    </form>
+    <div id="trainResult" class="result"></div>
+
+
+
+
+    <!-- Make Prediction -->
+    <h2>Make Stock Prediction</h2>
+    <form id="predictForm">
+        <input type="number" step="0.01" id="returns" placeholder="Returns" required>
+        <input type="number" step="0.01" id="sma_5" placeholder="5-day SMA" required>
+        <input type="number" step="0.01" id="sma_20" placeholder="20-day SMA" required>
+        <button type="submit">Predict</button>
+    </form>
+    <div id="predictResult" class="result"></div>
+
+
+  <script>
+    const baseUrl = 'http://127.0.0.1:5000';  // Adjust base URL for your Flask app
+
+    // Fetch Stock Price
+    async function getStockPrice() {
+      const symbol = document.getElementById('stockSymbol').value;
+      try {
+        const response = await fetch(`${baseUrl}/stock-price?symbol=${symbol}`);
+        const data = await response.json();
+        if (response.ok) {
+          document.getElementById('stockPriceResult').innerHTML = `
+            <strong>Symbol:</strong> ${data.symbol} <br>
+            <strong>Price:</strong> ${data.price}
+          `;
+        } else {
+          document.getElementById('stockPriceResult').innerHTML = `<span class="error">${data.error}</span>`;
+        }
+      } catch (error) {
+        document.getElementById('stockPriceResult').innerHTML = `<span class="error">${error.message}</span>`;
+      }
+    }
+
+    // Fetch Stock Chart
+    async function fetchStockChart() {
+      const symbol = document.getElementById('symbol').value;
+      if (!symbol) {
+        alert('Please enter a stock symbol.');
+        return;
+      }
+      try {
+        const response = await fetch(`${baseUrl}/stock-chart?symbol=${symbol}`);
+        if (response.ok) {
+          const chartData = await response.json();
+          const combinedLayout = {
+            title: chartData.layout.title,
+            xaxis: chartData.layout.xaxis,
+            yaxis: chartData.layout.yaxis,
+            yaxis2: chartData.layout.yaxis2,
+            grid: { rows: 2, columns: 1, subplots: [["xy"], ["xy2"]], roworder: 'top to bottom' },
+            showlegend: true
+          };
+          const combinedData = chartData.data.map((trace, index) => {
+            if (index === 1) {
+              trace.yaxis = 'y2';
+            }
+            return trace;
+          });
+          Plotly.react('chart', combinedData, combinedLayout);
+        } else {
+          const errorData = await response.json();
+          alert(`Error: ${errorData.error}`);
+        }
+      } catch (error) {
+        alert(`An error occurred: ${error.message}`);
+      }
+    }
+
+    // Fetch Indicators
+    document.getElementById('stockForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const symbol = document.getElementById('indicatorSymbol').value;
+      const start_date = document.getElementById('start_date').value;
+      const end_date = document.getElementById('end_date').value;
+      if (!symbol || !start_date || !end_date) {
+        alert("Please fill out all fields.");
+        return;
+      }
+      try {
+        const response = await axios.post(`${baseUrl}/stock-indicator-chart`, {
+          symbol,
+          start_date,
+          end_date
+        });
+        const chartData = response.data;
+        if (chartData.error) {
+          alert(chartData.error);
+          return;
+        }
+        Plotly.newPlot('chart2', chartData.data, chartData.layout);
+      } catch (error) {
+        console.error(error);
+        alert("An error occurred while fetching the data. Please check your inputs or try again later.");
+      }
+    });
+
+
+    // Get Latest SMA Values
+    document.getElementById('smaForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const symbol = document.getElementById('smaSymbol').value;
+    try {
+        const response = await axios.get(`${baseUrl}/get-latest-sma?symbol=${symbol}`);
+        const result = response.data;
+        document.getElementById('smaResult').innerHTML = `
+        <strong>Symbol:</strong> ${result.symbol}<br>
+        <strong>Date:</strong> ${result.date}<br>
+        <strong>SMA 5:</strong> ${result.sma_5.toFixed(2)}<br>
+        <strong>SMA 20:</strong> ${result.sma_20.toFixed(2)}<br>
+        <strong>Returns:</strong> ${(result.returns * 100).toFixed(2)}%
+        `;
+    } catch (error) {
+        document.getElementById('smaResult').innerHTML = `<span class="error">${error.response.data.error || error.message}</span>`;
+    }
+    });
+
+
+    // Train Model
+    document.getElementById('trainForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const symbol = document.getElementById('trainSymbol').value;
+      const start_date = document.getElementById('trainStartDate').value;
+      const end_date = document.getElementById('trainEndDate').value;
+      try {
+        const response = await axios.post(`${baseUrl}/train-model`, {
+          symbol,
+          start_date,
+          end_date
+        });
+        const result = response.data;
+        document.getElementById('trainResult').innerHTML = `
+          <strong>Message:</strong> ${result.message}<br>
+          <strong>Accuracy:</strong> ${result.accuracy.toFixed(4)}
+        `;
+      } catch (error) {
+        document.getElementById('trainResult').innerHTML = `<span class="error">${error.response.data.error || error.message}</span>`;
+      }
+    });
+
+    // Make Prediction
+    document.getElementById('predictForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const returns = parseFloat(document.getElementById('returns').value);
+      const sma_5 = parseFloat(document.getElementById('sma_5').value);
+      const sma_20 = parseFloat(document.getElementById('sma_20').value);
+      try {
+        const response = await axios.post(`${baseUrl}/predict`, {
+          returns,
+          sma_5,
+          sma_20
+        });
+        const result = response.data;
+        document.getElementById('predictResult').innerHTML = `
+          <strong>Prediction:</strong> ${result.prediction === 1 ? 'Up' : 'Down'}<br>
+          <strong>Probability:</strong> ${(result.probability * 100).toFixed(2)}%
+        `;
+      } catch (error) {
+        document.getElementById('predictResult').innerHTML = `<span class="error">${error.response.data.error || error.message}</span>`;
+      }
+    });
+  </script>
+</body>
+</html>

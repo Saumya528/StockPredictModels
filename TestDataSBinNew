@@ -1,0 +1,11 @@
+from nsepython import *
+print(indices)
+
+print(get_blockdeals())
+
+symbol = "SBIN"
+series = "EQ"
+start_date = "01-01-2025"
+end_date ="14-03-2025"
+print(equity_history(symbol,series,start_date,end_date))
+

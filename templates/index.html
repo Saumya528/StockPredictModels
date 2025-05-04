@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stock API Client</title>
-  <script></script>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -16,9 +17,10 @@
       width: 80%;
       margin: auto;
       background: #fff; 
-      margin-top: auto;
+      padding: 20px;
+      margin-top: 20px;
     }
-    h1 {
+    h1, h2 {
       text-align: center;
       color: #333;
     }
@@ -59,8 +61,6 @@
       font-weight: bold;
     }
   </style>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -69,31 +69,46 @@
     <!-- Get Stock Price -->
     <h2>Get Stock Price</h2>
     <label for="stockSymbol">Stock Symbol:</label>
-    <input type="text" id="stockSymbol" placeholder="Enter stock symbol (e.g., RELIANCE)" />
+    <input type="text" id="stockSymbol" placeholder="Enter stock symbol (e.g., AAPL)" />
     <button onclick="getStockPrice()">Get Price</button>
     <div id="stockPriceResult" class="result"></div>
 
-    <h2>Stock Chart Viewer</h1>
-
+    <!-- Stock Chart Viewer -->
+    <h2>Stock Chart Viewer</h2>
     <form id="stock-form">
         <label for="symbol">Enter Stock Symbol:</label>
-        <input type="text" id="symbol" name="symbol" placeholder="e.g., AAPL"><br><br>
+        <input type="text" id="symbol" name="symbol" placeholder="e.g., AAPL">
         <button type="button" onclick="fetchStockChart()">Generate Chart</button>
     </form>
-
-    <h2>Generated Stock Chart:</h2>
     <div id="chart" style="width: 100%; height: 500px;"></div>
-    
-    <!-- Fetch Indicators -->
-    <h1>Stock Indicator Chart</h1>
-    <form id="stockForm">
-        <input type="text" id="symbol" placeholder="Stock Symbol (e.g., RELIANCE)" required>
-        <input type="text" id="start_date" placeholder="Start Date (DD-MM-YYYY)" required>
-        <input type="text" id="end_date" placeholder="End Date (DD-MM-YYYY)" required>
-        <button type="submit">Get Chart</button>
+
+    <!-- Train Logistic Model -->
+    <h2>Train Logistic Prediction Model</h2>
+    <form id="trainForm">
+        <label for="trainSymbol">Stock Symbol:</label>
+        <input type="text" id="trainSymbol" placeholder="Stock Symbol (e.g., AAPL)" required>
+        <button type="submit">Train Logistic Model</button>
     </form>
-    <div id="chart2"></div>
-</div>
+    <div id="trainResult" class="result"></div>
+
+    <!-- Train SVM Model -->
+    <h2>Train SVM Prediction Model</h2>
+    <form id="trainForm1">
+        <label for="trainSymbol1">Stock Symbol:</label>
+        <input type="text" id="trainSymbol1" placeholder="Stock Symbol (e.g., AAPL)" required>
+        <button type="submit">Train SVM Model</button>
+    </form>
+    <div id="trainResult1" class="result"></div>
+
+    <!-- Predict Next Day Movement -->
+    <h2>Predict Next Day's Movement</h2>
+    <form id="predictForm">
+        <label for="predictSymbol">Stock Symbol:</label>
+        <input type="text" id="predictSymbol" placeholder="Stock Symbol (e.g., AAPL)" required>
+        <button type="button" onclick="predictNextDay()">Predict Movement</button>
+    </form>
+    <div id="predictionResult" class="result"></div>
+  </div>
 
   <script>
     const baseUrl = 'http://127.0.0.1:5000';  // Adjust base URL for your Flask app
@@ -107,7 +122,7 @@
         if (response.ok) {
           document.getElementById('stockPriceResult').innerHTML = `
             <strong>Symbol:</strong> ${data.symbol} <br>
-            <strong>Price:</strong> ${data.price}
+            <strong>Price:</strong> $${data.price}
           `;
         } else {
           document.getElementById('stockPriceResult').innerHTML = `<span class="error">${data.error}</span>`;
@@ -119,103 +134,106 @@
 
     // Fetch Stock Chart
     async function fetchStockChart() {
-            const symbol = document.getElementById('symbol').value;
-
-            if (!symbol) {
-                alert('Please enter a stock symbol.');
-                return;
+      const symbol = document.getElementById('symbol').value;
+      if (!symbol) {
+        alert('Please enter a stock symbol.');
+        return;
+      }
+      try {
+        const response = await fetch(`${baseUrl}/stock-chart?symbol=${symbol}`);
+        if (response.ok) {
+          const chartData = await response.json();
+          const combinedLayout = {
+            title: chartData.layout.title,
+            xaxis: chartData.layout.xaxis,
+            yaxis: chartData.layout.yaxis,
+            yaxis2: chartData.layout.yaxis2,
+            grid: { rows: 2, columns: 1, subplots: [["xy"], ["xy2"]], roworder: 'top to bottom' },
+            showlegend: true
+          };
+          const combinedData = chartData.data.map((trace, index) => {
+            if (index === 1) {
+              trace.yaxis = 'y2';
             }
-
-            try {
-                const response = await fetch(`${baseUrl}/stock-chart?symbol=${symbol}`);
-
-                if (response.ok) {
-                    const chartData = await response.json();
-
-                     // Render the chart using Plotly
-                     const combinedLayout = {
-                        title: chartData.layout.title,
-                        xaxis: chartData.layout.xaxis,
-                        yaxis: chartData.layout.yaxis,
-                        yaxis2: chartData.layout.yaxis2,
-                        grid: { rows: 2, columns: 1, subplots: [["xy"], ["xy2"]], roworder: 'top to bottom' },
-                        showlegend: true
-                    };
-
-                    // Combine price and volume as subplots
-                    const combinedData = chartData.data.map((trace, index) => {
-                        if (index === 1) { // Assuming second data is Volume
-                            trace.yaxis = 'y2'; // Assign to second y-axis
-                        }
-                        return trace;
-                    });
-
-                    Plotly.react('chart', combinedData, combinedLayout);
-                } else {
-                    const errorData = await response.json();
-                    alert(`Error: ${errorData.error}`);
-                }
-            } catch (error) {
-                alert(`An error occurred: ${error.message}`);
-            }
+            return trace;
+          });
+          Plotly.react('chart', combinedData, combinedLayout);
+        } else {
+          const errorData = await response.json();
+          alert(`Error: ${errorData.error}`);
         }
+      } catch (error) {
+        alert(`An error occurred: ${error.message}`);
+      }
+    }
 
-    // Fetch Indicators
-    document.getElementById('stockForm').addEventListener('submit', async (event) => {
-            event.preventDefault();
-
-            const symbol = document.getElementById('symbol').value;
-            const start_date = document.getElementById('start_date').value;
-            const end_date = document.getElementById('end_date').value;
-
-            if (!symbol || !start_date || !end_date) {
-                alert("Please fill out all fields.");
-                return;
-            }
-
-            try {
-                const response = await axios.post('/stock-indicator-chart', {
-                    symbol,
-                    start_date,
-                    end_date
-                });
-
-                const chartData = response.data;
-
-                if (chartData.error) {
-                    alert(chartData.error);
-                    return;
-                }
-                if (response.ok)
-                 {
-                    const chartData = await response.json();
-
-                     // Render the chart using Plotly
-                     const combinedLayout = {
-                        title: chartData.layout.title,
-                        xaxis: chartData.layout.xaxis,
-                        yaxis: chartData.layout.yaxis,
-                        yaxis2: chartData.layout.yaxis2,
-                        grid: { rows: 2, columns: 1, subplots: [["xy"], ["xy2"]], roworder: 'top to bottom' },
-                        showlegend: true
-                    };
-
-                    // Combine price and volume as subplots
-                    const combinedData = chartData.data.map((trace, index) => {
-                        if (index === 1) { // Assuming second data is Volume
-                            trace.yaxis = 'y2'; // Assign to second y-axis
-                        }
-                        return trace;
-                    });
-                  }
-
-                // Render the chart using Plotly
-                Plotly.newPlot('chart2', chartData.data);
-            } catch (error) {
-                console.error(error);
-                alert("An error occurred while fetching the data. Please check your inputs or try again later.");
-            }
+    // Train logistic Model
+    document.getElementById('trainForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const symbol = document.getElementById('trainSymbol').value;
+      try {
+        const response = await axios.post(`${baseUrl}/train-logistic`, {
+          symbol: symbol,
         });
+        const result = response.data;
+        document.getElementById('trainResult').innerHTML = `
+          <strong>Message:</strong> ${result.message}<br>
+          <strong>Accuracy:</strong> ${result.accuracy.toFixed(4)}
+        `;
+      } catch (error) {
+        document.getElementById('trainResult').innerHTML = `<span class="error">${error.response.data.error || error.message}</span>`;
+      }
+    });
+
+    // Train SVM Model
+    document.getElementById('trainForm1').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const symbol = document.getElementById('trainSymbol1').value;
+      try {
+        const response = await axios.post(`${baseUrl}/train-svm`, {
+          symbol: symbol,
+        });
+        const result = response.data;
+        document.getElementById('trainResult1').innerHTML = `
+          <strong>Message:</strong> ${result.message}<br>
+          <strong>Accuracy:</strong> ${result.accuracy.toFixed(4)}
+        `;
+      } catch (error) {
+        document.getElementById('trainResult1').innerHTML = `<span class="error">${error.response.data.error || error.message}</span>`;
+      }
+    });
+
+    // Predict Next Day's Movement
+    async function predictNextDay() {
+      const symbol = document.getElementById('predictSymbol').value;
+      if (!symbol) {
+        alert('Please enter a stock symbol.');
+        return;
+      }
+      try {
+        const response = await fetch(`${baseUrl}/predict-next-day`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ symbol: symbol })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          document.getElementById('predictionResult').innerHTML = `
+            <strong>Prediction:</strong> The stock is predicted to go ${data.predicted_movement_logistic} <br>
+            <strong>Predicted Price:</strong> $${data.predicted_price_logistic}<br>
+            <strong>Prediction:</strong> The stock is predicted to go ${data.predicted_movement_svm} <br>
+            <strong>Predicted Price:</strong> $${data.predicted_price_svm}
+          `;
+        } else {
+          document.getElementById('predictionResult').innerHTML = `<span class="error">${data.error}</span>`;
+        }
+      } catch (error) {
+        document.getElementById('predictionResult').innerHTML = `<span class="error">${error.message}</span>`;
+      }
+    }
   </script>
 </body>
 </html>
