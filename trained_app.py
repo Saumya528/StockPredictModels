@@ -148,6 +148,9 @@ def predict_next_day_logistic(stock_symbol, model, scaler, imputer):
         # Get the latest closing price for the stock
         latest_close = df['Close'].iloc[-1]
 
+        # Get average high-low range from recent days
+        avg_range = df[['High', 'Low']].tail(10).apply(lambda row: row['High'] - row['Low'], axis=1).mean()
+
         # Calculate the approximate next day's price based on predicted movement
         if prediction == 1:
             # Price is expected to go up
@@ -156,15 +159,20 @@ def predict_next_day_logistic(stock_symbol, model, scaler, imputer):
             # Price is expected to go down
             predicted_price = latest_close * (1 - df['Returns'].iloc[-1])  # Correctly apply return for downward prediction
 
+        # Predict high and low around predicted close
+        predicted_high = predicted_price + (avg_range / 2)
+        predicted_low = predicted_price - (avg_range / 2)
+
         # Return the prediction: movement (Up/Down) and predicted price for the next day
         print(f"Prediction: The stock is predicted to go {'Up' if prediction == 1 else 'Down'}")
         print(f"Predicted Price: {round(predicted_price, 2)}")
 
-        return ('Up' if prediction == 1 else 'Down'), round(predicted_price, 2)
-
+        return ( 'Up' if prediction == 1 else 'Down',round(predicted_price, 2),
+                round(predicted_high, 2),
+                round(predicted_low, 2))
     except Exception as e:
         print(f"Error in predicting next day's movement and price: {str(e)}")
-        return None, None  # Return None in case of error
+        return None, None,None,None  # Return None in case of error
 
 
 def train_svm_model(df):
@@ -229,6 +237,9 @@ def predict_next_day_svm(stock_symbol, model, scaler, imputer):
 
         # Get the latest closing price for the stock
         latest_close = df['Close'].iloc[-1]
+        
+        # Get average high-low range from recent days
+        avg_range = df[['High', 'Low']].tail(10).apply(lambda row: row['High'] - row['Low'], axis=1).mean()
 
         # Calculate the approximate next day's price based on predicted movement
         if prediction == 1:
@@ -238,15 +249,29 @@ def predict_next_day_svm(stock_symbol, model, scaler, imputer):
             # Price is expected to go down
             predicted_price = latest_close * (1 - df['Returns'].iloc[-1])  # Correctly apply return for downward prediction
 
+        # Predict high and low around predicted close
+        predicted_high = float(predicted_price + (avg_range / 2))
+        predicted_low = float(predicted_price - (avg_range / 2))
+
         # Return the prediction: movement (Up/Down) and predicted price for the next day
         print(f"Prediction: The stock is predicted to go {'Up' if prediction == 1 else 'Down'}")
         print(f"Predicted Price: {round(predicted_price, 2)}")
 
-        return ('Up' if prediction == 1 else 'Down'), round(predicted_price, 2)
+        return ( 'Up' if prediction == 1 else 'Down',round(predicted_price, 2),
+                round(predicted_high, 2),
+                round(predicted_low, 2))
 
     except Exception as e:
         print(f"Error in predicting next day's movement and price: {str(e)}")
-        return None, None  # Return None in case of error
+        return None,None,None,None  # Return None in case of error
+
+def to_float(val):
+    if isinstance(val, pd.Series):
+        return val.iloc[0] if not val.empty else float('nan')
+    try:
+        return float(val)
+    except Exception:
+        return float('nan')
 
 @app.route('/')
 def home():
@@ -419,35 +444,53 @@ def predict_next_day_route():
         if not stock_symbol:
             return jsonify({"error": "Missing required parameters"}), 400
 
-        # Predict the next day's movement and price
+        # Ensure model has been trained
         if 'global_model' not in globals() or 'global_scaler' not in globals() or 'global_imputer' not in globals():
             return jsonify({"error": "Model has not been trained yet. Please train the model first."}), 400
 
-        # Call the prediction function with model, scaler, and imputer
-        prediction_logistic, predicted_price_logistic = predict_next_day_logistic(stock_symbol, global_model, global_scaler, global_imputer)
+        # Get predictions
+        logistic_output = predict_next_day_logistic(stock_symbol, global_model, global_scaler, global_imputer)
+        svm_output = predict_next_day_svm(stock_symbol, global_model, global_scaler, global_imputer)
 
-        prediction_svm, predicted_price_svm = predict_next_day_svm(stock_symbol, global_model, global_scaler, global_imputer)
-
-        # Ensure the prediction and predicted price are serializable
-        if prediction_svm is None or predicted_price_svm is None:
-            return jsonify({"error": "Error predicting the next day's stock movement."}), 500
-        if prediction_logistic is None or predicted_price_logistic is None:
+        # Unpack and ensure all outputs are valid
+        if logistic_output is None or svm_output is None:
             return jsonify({"error": "Error predicting the next day's stock movement."}), 500
 
-        # Convert prediction and predicted_price to native Python types if necessary
-        prediction_logistic = str(prediction_logistic)  # Ensure it's a string ("Up" or "Down")
-        predicted_price_logistic = float(predicted_price_logistic)  # Ensure it's a float
-        prediction_svm = str(prediction_svm)  # Ensure it's a string ("Up" or "Down")
-        predicted_price_svm = float(predicted_price_svm)  # Ensure it's a float
+        (
+            prediction_logistic,
+            predicted_price_logistic,
+            predicted_price_high_logistic,
+            predicted_price_low_logistic
+        ) = logistic_output
 
-        return jsonify({
-            "predicted_movement_logistic": prediction_logistic,
-            "predicted_price_logistic": round(predicted_price_logistic, 2),
-            "predicted_movement_svm": prediction_svm,
-            "predicted_price_svm": round(predicted_price_svm, 2)
-        })
+        (
+            prediction_svm,
+            predicted_price_svm,
+            predicted_price_high_svm,
+            predicted_price_low_svm
+        ) = svm_output
+
+        # Convert all outputs to native types if any are still Series
+        def to_float(val):
+            return val.item() if isinstance(val, pd.Series) else float(val)
+
+        response = {
+            "predicted_movement_logistic": str(prediction_logistic),
+            "predicted_price_logistic": round(to_float(predicted_price_logistic), 2),
+            "predicted_price_high_logistic": round(to_float(predicted_price_high_logistic), 2),
+            "predicted_price_low_logistic": round(to_float(predicted_price_low_logistic), 2),
+
+            "predicted_movement_svm": str(prediction_svm),
+            "predicted_price_svm": round(to_float(predicted_price_svm), 2),
+            "predicted_price_high_svm": round(to_float(predicted_price_high_svm), 2),
+            "predicted_price_low_svm": round(to_float(predicted_price_low_svm), 2),
+        }
+
+        return jsonify(response)
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 if __name__ == '__main__':

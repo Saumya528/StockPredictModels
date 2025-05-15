@@ -222,10 +222,17 @@
         const data = await response.json();
         if (response.ok) {
           document.getElementById('predictionResult').innerHTML = `
-            <strong>Prediction:</strong> The stock is predicted to go ${data.predicted_movement_logistic} <br>
-            <strong>Predicted Price:</strong> $${data.predicted_price_logistic}<br>
-            <strong>Prediction:</strong> The stock is predicted to go ${data.predicted_movement_svm} <br>
-            <strong>Predicted Price:</strong> $${data.predicted_price_svm}
+            <h3>Logistic Regression Prediction</h3>
+            <strong>Movement:</strong> ${data.predicted_movement_logistic}<br>
+            <strong>Predicted Close:</strong> $${data.predicted_price_logistic}<br>
+            <strong>Predicted High:</strong> $${data.predicted_price_high_logistic}<br>
+            <strong>Predicted Low:</strong> $${data.predicted_price_low_logistic}<br><br>
+
+            <h3>SVM Prediction</h3>
+            <strong>Movement:</strong> ${data.predicted_movement_svm}<br>
+            <strong>Predicted Close:</strong> $${data.predicted_price_svm}<br>
+            <strong>Predicted High:</strong> $${data.predicted_price_high_svm}<br>
+            <strong>Predicted Low:</strong> $${data.predicted_price_low_svm}
           `;
         } else {
           document.getElementById('predictionResult').innerHTML = `<span class="error">${data.error}</span>`;
