@@ -48,6 +48,8 @@ Installation:
 
 pip install nsepython
 
+pip install nsepy
+
 pip install plotly
 
 Run:
@@ -66,3 +68,15 @@ pip install flask-cors
 
 
 Git Repo: https://github.com/Saumya528/StockPredictModels.git
+
+ipykernel for nsepy
+
+.venv\Lib\site-packages\nsepy\history.py
+
+
+Replace del(kwargs['frame'])
+ with if 'frame' in kwargs:
+    try:
+        del kwargs['frame']
+    except TypeError:
+        pass  # Handle FrameLocalsProxy issue

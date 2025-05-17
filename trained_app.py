@@ -13,11 +13,21 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-from flask import Response
+from flask import Response,session
 import json
 import matplotlib.pyplot as plt
 import mplfinance as mpf
+import os
+import gc
+import atexit
 
+
+# ✅ Load market closed days CSV
+SAVE_FOLDER = "Data_downloaded"
+current_year = datetime.now().year
+save_path = os.path.join(SAVE_FOLDER, f"market_closed_days_{current_year}.csv")
+closed_df = pd.read_csv(save_path, parse_dates=["date"])
+closed_dates = set(closed_df["date"].dt.date)
 
 
 # Initialize Flask app
@@ -129,9 +139,22 @@ def predict_next_day_logistic(stock_symbol, model, scaler, imputer):
     try:
         # Prepare data and fetch the latest row (latest trading day)
         df = prepare_data(stock_symbol)
+
+        # Ensure index is datetime
+        df.index = pd.to_datetime(df.index)
+        df["date"] = df.index.date  # Extract date for comparison
+
+        # Filter only open market days (exclude weekends and holidays)
+        df_open = df[~df["date"].isin(closed_dates)]
+
+        if df_open.empty:
+            raise ValueError("No open trading days found in the historical data.")
         
         # Get the latest data (Returns, SMA_5, SMA_20, Fibonacci levels)
-        latest_data = df.iloc[-1][['Returns', 'SMA_5', 'SMA_20', 'Fibonacci_23_6', 'Fibonacci_38_2', 'Fibonacci_50_0', 'Fibonacci_61_8', 'Fibonacci_1618', 'Fibonacci_2618']].values.reshape(1, -1)
+        features = ['Returns', 'SMA_5', 'SMA_20', 'Fibonacci_23_6', 'Fibonacci_38_2', 
+            'Fibonacci_50_0', 'Fibonacci_61_8', 'Fibonacci_1618', 'Fibonacci_2618']
+
+        latest_data = df[features].iloc[[-1]].to_numpy(dtype=np.float64)
 
         # Impute missing values (if any) before scaling
         latest_data_imputed = imputer.transform(latest_data)
@@ -220,8 +243,19 @@ def predict_next_day_svm(stock_symbol, model, scaler, imputer):
         # Prepare data and fetch the latest row (latest trading day)
         df = prepare_data(stock_symbol)
         
+        # Ensure index is datetime
+        df.index = pd.to_datetime(df.index)
+        df["date"] = df.index.date  # Extract date for comparison
+
+        # Filter only open market days (exclude weekends and holidays)
+        df_open = df[~df["date"].isin(closed_dates)]
+
+        if df_open.empty:
+            raise ValueError("No open trading days found in the historical data.")
+        
         # Get the latest data (Returns, SMA_5, SMA_20, Fibonacci levels)
-        latest_data = df.iloc[-1][['Returns', 'SMA_5', 'SMA_20', 'Fibonacci_23_6', 'Fibonacci_38_2', 'Fibonacci_50_0', 'Fibonacci_61_8', 'Fibonacci_1618', 'Fibonacci_2618']].values.reshape(1, -1)
+        features = ['Returns', 'SMA_5', 'SMA_20', 'Fibonacci_23_6', 'Fibonacci_38_2','Fibonacci_50_0', 'Fibonacci_61_8', 'Fibonacci_1618', 'Fibonacci_2618']
+        latest_data = df[features].iloc[[-1]].to_numpy(dtype=np.float64)
 
         # Impute missing values (if any) before scaling
         latest_data_imputed = imputer.transform(latest_data)
@@ -448,6 +482,17 @@ def predict_next_day_route():
         if 'global_model' not in globals() or 'global_scaler' not in globals() or 'global_imputer' not in globals():
             return jsonify({"error": "Model has not been trained yet. Please train the model first."}), 400
 
+         # ✅ Find next open trading day
+        next_day = datetime.now().date() + timedelta(days=1)
+        while next_day in closed_dates:
+            next_day += timedelta(days=1)
+        
+        print(f"Model: {global_model}")
+        print(f"Scaler: {global_scaler}")
+        print(f"Imputer: {global_imputer}")
+
+
+
         # Get predictions
         logistic_output = predict_next_day_logistic(stock_symbol, global_model, global_scaler, global_imputer)
         svm_output = predict_next_day_svm(stock_symbol, global_model, global_scaler, global_imputer)
@@ -471,26 +516,84 @@ def predict_next_day_route():
         ) = svm_output
 
         # Convert all outputs to native types if any are still Series
-        def to_float(val):
-            return val.item() if isinstance(val, pd.Series) else float(val)
+        # ✅ Safe float conversion for JSON
+        def to_safe_float(val):
+            try:
+                if val is None:
+                    return None
+                if isinstance(val, pd.Series):
+                    val = val.iloc[0] if not val.empty else None
+                val = float(val)
+                return None if pd.isna(val) or np.isnan(val) else round(val, 2)
+            except:
+                return None
 
+        # ✅ Construct response dictionary
         response = {
+            "next_open_trading_day": str(next_day),
             "predicted_movement_logistic": str(prediction_logistic),
-            "predicted_price_logistic": round(to_float(predicted_price_logistic), 2),
-            "predicted_price_high_logistic": round(to_float(predicted_price_high_logistic), 2),
-            "predicted_price_low_logistic": round(to_float(predicted_price_low_logistic), 2),
+            "predicted_price_logistic": to_safe_float(predicted_price_logistic),
+            "predicted_price_high_logistic": to_safe_float(predicted_price_high_logistic),
+            "predicted_price_low_logistic": to_safe_float(predicted_price_low_logistic),
 
             "predicted_movement_svm": str(prediction_svm),
-            "predicted_price_svm": round(to_float(predicted_price_svm), 2),
-            "predicted_price_high_svm": round(to_float(predicted_price_high_svm), 2),
-            "predicted_price_low_svm": round(to_float(predicted_price_low_svm), 2),
+            "predicted_price_svm": to_safe_float(predicted_price_svm),
+            "predicted_price_high_svm": to_safe_float(predicted_price_high_svm),
+            "predicted_price_low_svm": to_safe_float(predicted_price_low_svm),
         }
+
+        # ✅ Print response to debug (optional)
+        print("Final JSON Response:", json.dumps(response, indent=2))
 
         return jsonify(response)
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# === Utility: Delete temp files ===
+def delete_temp_files():
+    temp_extensions = [".xlsx", ".png", ".csv", ".tmp"]
+    for fname in os.listdir("."):
+        if any(fname.endswith(ext) for ext in temp_extensions):
+            try:
+                os.remove(fname)
+                print(f"🗑️ Deleted temporary file: {fname}")
+            except Exception as e:
+                print(f"⚠️ Could not delete {fname}: {e}")
+
+
+
+''' 
+#Not Needed
+=== After each response: clean memory ===
+@app.after_request
+def cleanup_after_response(response):
+    global global_model, global_scaler, global_imputer
+    global_model = None
+    global_scaler = None
+    global_imputer = None
+
+    # Clear Flask session if used
+    try:
+        session.clear()
+    except Exception:
+        pass
+
+    # Force garbage collection
+    gc.collect()
+
+    # Delete temp files
+    delete_temp_files()
+
+    return response
+'''
+
+# === On App Exit (Ctrl+C or shutdown) ===
+@atexit.register
+def final_cleanup():
+    print("🔁 Final cleanup on exit...")
+    delete_temp_files()
+    gc.collect()
 
 
 if __name__ == '__main__':
